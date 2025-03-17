@@ -89,6 +89,7 @@ async function sendMarketRequest(requestBody) {
 
 async function startMarketParsing(params) {
   const { categories, cities, locationType, locationOption, period, priceFrom, priceTo, sellerType } = params;
+
   const validCategories = [];
   for (const catName of categories) {
     const catId = getCategoryId(catName);
@@ -98,6 +99,7 @@ async function startMarketParsing(params) {
       console.warn(`Неизвестная категория: "${catName}" (пропускаем)`);
     }
   }
+
   const validCities = [];
   for (const cityName of cities) {
     const cId = getCityId(cityName);
@@ -107,11 +109,17 @@ async function startMarketParsing(params) {
       console.warn(`Неизвестный город: "${cityName}" (пропускаем)`);
     }
   }
+
   totalSteps = validCategories.length * validCities.length;
   currentStep = 0;
   resultsTable = [];
   stopParsing = false;
-  let headers = ["Категория", "Город", "Период"];
+
+  let headers = [
+    "Категория",
+    "Город",
+    "Период"
+  ];
   if (locationType !== "none") {
     headers.push("Тип локации");
   }
@@ -127,11 +135,14 @@ async function startMarketParsing(params) {
     "Всего продавцов в категории",
     "Конверсия из просмотра в контакт"
   ]);
-  for (const cityObj of validCities) {
-    for (const catObj of validCategories) {
+
+  for (const catObj of validCategories) {
+    for (const cityObj of validCities) {
       if (stopParsing) break;
+
       const requestBody = buildRequestBody(catObj.id, cityObj.id, locationType, locationOption, period, priceFrom, priceTo, sellerType);
       console.log("Отправка запроса:", requestBody);
+
       const data = await sendMarketRequest(requestBody);
       if (data.error) {
         console.error(`Ошибка для категории "${catObj.name}" и города "${cityObj.name}":`, data.error);
@@ -140,47 +151,48 @@ async function startMarketParsing(params) {
           break;
         }
       } else {
-        if (!data.nodes || (Array.isArray(data.nodes) && data.nodes.length === 0)) {
+        // Раньше здесь была проверка на data.nodes. Убираем её.
+        if (!data.summary) {
           chrome.runtime.sendMessage({
             action: 'showAlert',
-            message: "Не получилось загрузить аналитику, так как статистика отсутствует для выбранного периода. Выберите другой период или измените фильтры."
+            message: `Нет данных для категории "${catObj.name}" в городе "${cityObj.name}".`
           });
           currentStep++;
           updateProgress();
           await delay(getRandomDelay());
           continue;
         }
-        if (data.summary) {
-          let row = [];
-          row.push(catObj.name, cityObj.name, period);
-          if (locationType !== "none") {
-            row.push(locationType === "districts" ? "Районы" : "Метро");
-          }
-          if (priceFrom !== null && priceTo !== null) {
-            row.push(`${priceFrom}-${priceTo}`);
-          } else {
-            row.push("");
-          }
-          row.push(getSellerText(sellerType));
-          row.push(data.summary.demand ? data.summary.demand.estimate : "");
-          row.push(data.summary.countItems);
-          row.push(data.summary.contacts);
-          row.push(data.summary.views);
-          row.push(data.summary.viewsPerItem);
-          row.push(data.summary.categoryRateByItems);
-          row.push(data.summary.countSellers);
-          row.push(data.summary.viewsToContactConversion);
-          resultsTable.push(row);
-        } else {
-          console.warn("Отсутствует summary в ответе", data);
+
+        // Если summary есть, заполняем строку
+        let row = [];
+        row.push(catObj.name, cityObj.name, period);
+        if (locationType !== "none") {
+          row.push(locationType === "districts" ? "Районы" : "Метро");
         }
+        if (priceFrom !== null && priceTo !== null) {
+          row.push(`${priceFrom}-${priceTo}`);
+        } else {
+          row.push("");
+        }
+        row.push(getSellerText(sellerType));
+        row.push(data.summary.demand ? data.summary.demand.estimate : "");
+        row.push(data.summary.countItems);
+        row.push(data.summary.contacts);
+        row.push(data.summary.views);
+        row.push(data.summary.viewsPerItem);
+        row.push(data.summary.categoryRateByItems);
+        row.push(data.summary.countSellers);
+        row.push(data.summary.viewsToContactConversion);
+        resultsTable.push(row);
       }
+
       currentStep++;
       updateProgress();
       await delay(getRandomDelay());
     }
     if (stopParsing) break;
   }
+
   console.log("Парсинг завершён.");
   exportResultsToCSV(headers, resultsTable);
   chrome.runtime.sendMessage({
@@ -199,18 +211,12 @@ function exportResultsToCSV(headers, rows) {
     }).join(",");
     csvContent += csvRow + "\n";
   });
-  console.log("CSV-содержимое:", csvContent);
+
   const dataUrl = "data:text/csv;charset=utf-8," + encodeURIComponent(csvContent);
   chrome.downloads.download({
     url: dataUrl,
     filename: "avito_market_results.csv",
     saveAs: false
-  }, (downloadId) => {
-    if (chrome.runtime.lastError) {
-      console.error("Ошибка скачивания:", chrome.runtime.lastError);
-    } else {
-      console.log("Скачивание начато, downloadId:", downloadId);
-    }
   });
 }
 
