@@ -1,21 +1,65 @@
-// Переключение вкладок
-const tabQueries = document.getElementById('tabQueries');
-const tabCategories = document.getElementById('tabCategories');
-const queriesSection = document.getElementById('queriesSection');
-const categoriesSection = document.getElementById('categoriesSection');
+window.addEventListener('DOMContentLoaded', () => {
+  // Обработка переключения вкладок
+  const tabQueries = document.getElementById('tabQueries');
+  const tabCategories = document.getElementById('tabCategories');
+  const queriesSection = document.getElementById('queriesSection');
+  const categoriesSection = document.getElementById('categoriesSection');
 
-tabQueries.addEventListener('click', () => {
-  tabQueries.classList.add('active');
-  tabCategories.classList.remove('active');
-  queriesSection.style.display = 'block';
-  categoriesSection.style.display = 'none';
-});
+  tabQueries.addEventListener('click', () => {
+    tabQueries.classList.add('active');
+    tabCategories.classList.remove('active');
+    queriesSection.style.display = 'block';
+    categoriesSection.style.display = 'none';
+  });
 
-tabCategories.addEventListener('click', () => {
-  tabCategories.classList.add('active');
-  tabQueries.classList.remove('active');
-  categoriesSection.style.display = 'block';
-  queriesSection.style.display = 'none';
+  tabCategories.addEventListener('click', () => {
+    tabCategories.classList.add('active');
+    tabQueries.classList.remove('active');
+    categoriesSection.style.display = 'block';
+    queriesSection.style.display = 'none';
+  });
+
+  // Обработка изменения поля "Тип Локации" (для аналитики по категориям)
+  const locationTypeSelect = document.getElementById('locationType');
+  if (locationTypeSelect) {
+    locationTypeSelect.addEventListener('change', () => {
+      const value = locationTypeSelect.value;
+      const container = document.getElementById('locationOptionsContainer');
+      const label = document.getElementById('locationOptionsLabel');
+      const select = document.getElementById('locationOptions');
+      if (value === "none") {
+        container.style.display = "none";
+      } else {
+        container.style.display = "block";
+        select.innerHTML = "";
+        if (value === "districts") {
+          label.textContent = "Выберите район:";
+          const options = [
+            { value: "101", text: "Центральный район" },
+            { value: "102", text: "Северный район" }
+          ];
+          options.forEach(opt => {
+            const option = document.createElement('option');
+            option.value = opt.value;
+            option.textContent = opt.text;
+            select.appendChild(option);
+          });
+        } else if (value === "metro") {
+          label.textContent = "Выберите метро:";
+          const options = [
+            { value: "201", text: "Садовая" },
+            { value: "202", text: "Арбатская" }
+          ];
+          options.forEach(opt => {
+            const option = document.createElement('option');
+            option.value = opt.value;
+            option.textContent = opt.text;
+            select.appendChild(option);
+          });
+        }
+      }
+    });
+  }
 });
 
 // Обработка формы "Аналитика по запросам"
@@ -85,7 +129,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       updateCategoriesProgress(message.progress);
       updateCategoriesParsedCount(message.parsedCount);
     } else {
-      // Если mode не указан, обновляем оба
       updateQueriesProgress(message.progress);
       updateQueriesParsedCount(message.parsedCount);
       updateCategoriesProgress(message.progress);

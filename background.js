@@ -3,43 +3,61 @@ import { cityMapping } from "./cities.js";
 
 console.log("Combined background script loaded.");
 
-// Глобальные переменные для аналитики по запросам
-let resultsTableQueries = [];
-let totalStepsQueries = 0;
-let currentStepQueries = 0;
-let stopParsingQueries = false;
-
-// Глобальные переменные для аналитики по категориям
-let resultsTableCategories = [];
-let totalStepsCategories = 0;
-let currentStepCategories = 0;
-let stopParsingCategories = false;
-
-// Функции для аналитики по запросам
-function getRegionId(region) {
-  region = region.trim().toLowerCase();
-  const regionMapping = {
-    "москва": 637640,
-    "санкт-петербург": 653240,
-    "казань": 650400,
-    "севастополь": 621585
-  };
-  if (/^\d+$/.test(region)) {
-    return region;
-  }
-  return regionMapping[region] || null;
-}
-
-function getRandomBatchSize() {
-  return Math.floor(Math.random() * 4) + 2;
-}
-
+// ------------------------------
+// Общие утилиты
+// ------------------------------
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function getRandomDelay() {
   return Math.floor(Math.random() * 2000) + 1000;
+}
+
+function getSellerText(sellerType) {
+  if (sellerType === 1) return "Частные";
+  if (sellerType === 2) return "Компании";
+  return "Все продавцы";
+}
+
+async function sendMarketRequest(requestBody) {
+  try {
+    const response = await fetch("https://www.avito.ru/web/1/sellers/analytics/market", {
+      method: "POST",
+      headers: {
+        "accept": "application/json, text/plain, */*",
+        "content-type": "application/json",
+        "origin": "https://www.avito.ru",
+        "referer": "https://www.avito.ru/analytics/market",
+        "user-agent": "Mozilla/5.0"
+      },
+      credentials: "include",
+      body: JSON.stringify(requestBody)
+    });
+    if (!response.ok) {
+      return { error: `Ошибка запроса: ${response.status}` };
+    }
+    return await response.json();
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+// ------------------------------
+// Функции для аналитики по запросам (wordstat)
+// ------------------------------
+let resultsTableQueries = [];
+let totalStepsQueries = 0;
+let currentStepQueries = 0;
+let stopParsingQueries = false;
+
+function getCityId(cityName) {
+  const key = cityName.trim().toLowerCase();
+  return cityMapping[key] || null;
+}
+
+function getRandomBatchSize() {
+  return Math.floor(Math.random() * 4) + 2;
 }
 
 function updateQueriesProgress() {
@@ -53,7 +71,7 @@ function updateQueriesProgress() {
 }
 
 async function sendAnalyticsRequest(singleQuery, region, period) {
-  const regionId = getRegionId(region);
+  const regionId = getCityId(region);
   console.log(`Sending query "${singleQuery}" for region "${region}" (ID: ${regionId})`);
   try {
     const response = await fetch("https://www.avito.ru/web/1/sellers/analytics/wordstat", {
@@ -89,7 +107,6 @@ async function startQueriesParsing({ queries, regions, period }) {
   stopParsingQueries = false;
   totalStepsQueries = queries.length * regions.length;
   currentStepQueries = 0;
-
   for (let region of regions) {
     let index = 0;
     while (index < queries.length && !stopParsingQueries) {
@@ -171,15 +188,17 @@ function exportQueriesResults() {
   });
 }
 
-// Функции для аналитики по категориям
+// ------------------------------
+// Функции для аналитики по категориям (Market)
+// ------------------------------
+let resultsTableCategories = [];
+let totalStepsCategories = 0;
+let currentStepCategories = 0;
+let stopParsingCategories = false;
+
 function getCategoryId(categoryName) {
   const key = categoryName.trim().toLowerCase();
   return categoryMapping[key] || null;
-}
-
-function getCityId(cityName) {
-  const key = cityName.trim().toLowerCase();
-  return cityMapping[key] || null;
 }
 
 function updateCategoriesProgress(progress) {
@@ -189,6 +208,29 @@ function updateCategoriesProgress(progress) {
     parsedCount: currentStepCategories,
     mode: 'categories'
   });
+}
+
+function buildRequestBodyCategory(categoryId, cityId, locationType, locationOption, period, priceFrom, priceTo, sellerType) {
+  const filters = {
+    nodeId: categoryId,
+    locationIds: [cityId],
+    districtIds: (locationType === "districts") ? [parseInt(locationOption)] : [],
+    metroIds: (locationType === "metro") ? [parseInt(locationOption)] : [],
+    sellerType: sellerType
+  };
+  if (priceFrom !== null) {
+    filters.minPrice = priceFrom;
+  }
+  if (priceTo !== null) {
+    filters.maxPrice = priceTo;
+  }
+  return {
+    filters,
+    group: period,
+    order: "demand",
+    direction: "desc",
+    splitBy: "category"
+  };
 }
 
 async function startMarketParsing({ categories, cities, locationType, locationOption, period, priceFrom, priceTo, sellerType }) {
@@ -235,7 +277,7 @@ async function startMarketParsing({ categories, cities, locationType, locationOp
   for (const catObj of validCategories) {
     for (const cityObj of validCities) {
       if (stopParsingCategories) break;
-      const requestBody = buildRequestBody(catObj.id, cityObj.id, locationType, locationOption, period, priceFrom, priceTo, sellerType);
+      const requestBody = buildRequestBodyCategory(catObj.id, cityObj.id, locationType, locationOption, period, priceFrom, priceTo, sellerType);
       console.log("Отправка запроса (категории):", requestBody);
       const data = await sendMarketRequest(requestBody);
       if (data.error) {
@@ -309,6 +351,9 @@ function exportCategoriesResults(headers, rows) {
   });
 }
 
+// ------------------------------
+// Слушатель сообщений из popup
+// ------------------------------
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'startParsing') {
     startQueriesParsing(message.data);
