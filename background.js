@@ -1,21 +1,37 @@
 import { categoryMapping } from "./category_id.js";
 import { cityMapping } from "./cities.js";
 
-console.log("Фоновый скрипт для Avito Market Analytics запущен.");
+console.log("Combined background script loaded.");
 
-let resultsTable = [];
-let totalSteps = 0;
-let currentStep = 0;
-let stopParsing = false;
+// Глобальные переменные для аналитики по запросам
+let resultsTableQueries = [];
+let totalStepsQueries = 0;
+let currentStepQueries = 0;
+let stopParsingQueries = false;
 
-function getCategoryId(categoryName) {
-  const key = categoryName.trim().toLowerCase();
-  return categoryMapping[key] || null;
+// Глобальные переменные для аналитики по категориям
+let resultsTableCategories = [];
+let totalStepsCategories = 0;
+let currentStepCategories = 0;
+let stopParsingCategories = false;
+
+// Функции для аналитики по запросам
+function getRegionId(region) {
+  region = region.trim().toLowerCase();
+  const regionMapping = {
+    "москва": 637640,
+    "санкт-петербург": 653240,
+    "казань": 650400,
+    "севастополь": 621585
+  };
+  if (/^\d+$/.test(region)) {
+    return region;
+  }
+  return regionMapping[region] || null;
 }
 
-function getCityId(cityName) {
-  const key = cityName.trim().toLowerCase();
-  return cityMapping[key] || null;
+function getRandomBatchSize() {
+  return Math.floor(Math.random() * 4) + 2;
 }
 
 function delay(ms) {
@@ -26,57 +42,38 @@ function getRandomDelay() {
   return Math.floor(Math.random() * 2000) + 1000;
 }
 
-function updateProgress() {
-  const progressPercent = Math.round((currentStep / totalSteps) * 100);
+function updateQueriesProgress() {
+  const progress = Math.round((currentStepQueries / totalStepsQueries) * 100);
   chrome.runtime.sendMessage({
     action: 'parsingProgress',
-    progress: progressPercent,
-    parsedCount: currentStep
+    progress: progress,
+    parsedCount: currentStepQueries,
+    mode: 'queries'
   });
 }
 
-function getSellerText(sellerType) {
-  if (sellerType === 1) return "Частные";
-  if (sellerType === 2) return "Компании";
-  return "Все продавцы";
-}
-
-function buildRequestBody(categoryId, cityId, locationType, locationOption, period, priceFrom, priceTo, sellerType) {
-  const filters = {
-    nodeId: categoryId,
-    locationIds: [cityId],
-    districtIds: (locationType === "districts") ? [parseInt(locationOption)] : [],
-    metroIds: (locationType === "metro") ? [parseInt(locationOption)] : [],
-    sellerType: sellerType
-  };
-  if (priceFrom !== null) {
-    filters.minPrice = priceFrom;
-  }
-  if (priceTo !== null) {
-    filters.maxPrice = priceTo;
-  }
-  return {
-    filters,
-    group: period,
-    order: "demand",
-    direction: "desc",
-    splitBy: "category"
-  };
-}
-
-async function sendMarketRequest(requestBody) {
+async function sendAnalyticsRequest(singleQuery, region, period) {
+  const regionId = getRegionId(region);
+  console.log(`Sending query "${singleQuery}" for region "${region}" (ID: ${regionId})`);
   try {
-    const response = await fetch("https://www.avito.ru/web/1/sellers/analytics/market", {
+    const response = await fetch("https://www.avito.ru/web/1/sellers/analytics/wordstat", {
       method: "POST",
       headers: {
         "accept": "application/json, text/plain, */*",
+        "accept-language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
         "content-type": "application/json",
         "origin": "https://www.avito.ru",
-        "referer": "https://www.avito.ru/analytics/market",
-        "user-agent": "Mozilla/5.0"
+        "referer": "https://www.avito.ru/analytics/wordstat",
+        "sec-ch-ua": "\"Chromium\";v=\"134\", \"Not:A-Brand\";v=\"24\", \"Google Chrome\";v=\"134\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"macOS\""
       },
       credentials: "include",
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify({
+        queries: [singleQuery],
+        filters: { duration: period, locationId: regionId, categoryId: null },
+        strictMode: false
+      })
     });
     if (!response.ok) {
       return { error: `Ошибка запроса: ${response.status}` };
@@ -87,10 +84,115 @@ async function sendMarketRequest(requestBody) {
   }
 }
 
-async function startMarketParsing(params) {
-  const { categories, cities, locationType, locationOption, period, priceFrom, priceTo, sellerType } = params;
+async function startQueriesParsing({ queries, regions, period }) {
+  resultsTableQueries = [];
+  stopParsingQueries = false;
+  totalStepsQueries = queries.length * regions.length;
+  currentStepQueries = 0;
 
-  const validCategories = [];
+  for (let region of regions) {
+    let index = 0;
+    while (index < queries.length && !stopParsingQueries) {
+      const batchSize = queries.length > 15 ? getRandomBatchSize() : 5;
+      const batch = queries.slice(index, index + batchSize);
+      index += batchSize;
+      try {
+        const batchResults = await Promise.all(batch.map(query => sendAnalyticsRequest(query, region, period)));
+        for (let i = 0; i < batchResults.length; i++) {
+          const data = batchResults[i];
+          let totalCount;
+          if (data.error) {
+            totalCount = data.error;
+            if (data.error.includes("429") || data.error.toLowerCase().includes("бан")) {
+              stopParsingQueries = true;
+              console.error(`Блокировка для запроса "${batch[i]}" в регионе "${region}".`);
+              break;
+            }
+          } else if (data && Array.isArray(data.periodData)) {
+            totalCount = 0;
+            for (const dayInfo of data.periodData) {
+              if (Array.isArray(dayInfo.counts)) {
+                const daySum = dayInfo.counts.reduce((acc, val) => acc + Number(val || 0), 0);
+                totalCount += daySum;
+              }
+            }
+          } else {
+            totalCount = "Неверный формат ответа";
+            console.warn("Неверный формат:", data);
+          }
+          resultsTableQueries.push({
+            query: batch[i],
+            region: region,
+            period: period === "week" ? "7 дней" : "30 дней",
+            count: totalCount
+          });
+          currentStepQueries++;
+          updateQueriesProgress();
+        }
+      } catch (error) {
+        console.error(`Ошибка для региона "${region}" и батча: ${batch.join(", ")}`, error);
+        currentStepQueries += batch.length;
+        updateQueriesProgress();
+      }
+      if (stopParsingQueries) break;
+      await delay(getRandomDelay());
+    }
+    if (stopParsingQueries) break;
+  }
+  exportQueriesResults();
+  chrome.runtime.sendMessage({
+    action: 'parsingProgress',
+    progress: 100,
+    parsedCount: currentStepQueries,
+    mode: 'queries'
+  });
+}
+
+function exportQueriesResults() {
+  const headers = ["Ключевой запрос", "Регион", "Период", "Количество запросов"];
+  let csvContent = headers.join(",") + "\n";
+  resultsTableQueries.forEach(item => {
+    const row = [
+      item.query,
+      item.region,
+      item.period,
+      item.count
+    ].map(field => {
+      const str = String(field);
+      return str.includes(",") ? `"${str}"` : str;
+    }).join(",");
+    csvContent += row + "\n";
+  });
+  const dataUrl = "data:text/csv;charset=utf-8," + encodeURIComponent(csvContent);
+  chrome.downloads.download({
+    url: dataUrl,
+    filename: "queries_results.csv",
+    saveAs: false
+  });
+}
+
+// Функции для аналитики по категориям
+function getCategoryId(categoryName) {
+  const key = categoryName.trim().toLowerCase();
+  return categoryMapping[key] || null;
+}
+
+function getCityId(cityName) {
+  const key = cityName.trim().toLowerCase();
+  return cityMapping[key] || null;
+}
+
+function updateCategoriesProgress(progress) {
+  chrome.runtime.sendMessage({
+    action: 'parsingProgress',
+    progress: progress,
+    parsedCount: currentStepCategories,
+    mode: 'categories'
+  });
+}
+
+async function startMarketParsing({ categories, cities, locationType, locationOption, period, priceFrom, priceTo, sellerType }) {
+  let validCategories = [];
   for (const catName of categories) {
     const catId = getCategoryId(catName);
     if (catId) {
@@ -99,8 +201,7 @@ async function startMarketParsing(params) {
       console.warn(`Неизвестная категория: "${catName}" (пропускаем)`);
     }
   }
-
-  const validCities = [];
+  let validCities = [];
   for (const cityName of cities) {
     const cId = getCityId(cityName);
     if (cId) {
@@ -109,17 +210,12 @@ async function startMarketParsing(params) {
       console.warn(`Неизвестный город: "${cityName}" (пропускаем)`);
     }
   }
+  totalStepsCategories = validCategories.length * validCities.length;
+  currentStepCategories = 0;
+  resultsTableCategories = [];
+  stopParsingCategories = false;
 
-  totalSteps = validCategories.length * validCities.length;
-  currentStep = 0;
-  resultsTable = [];
-  stopParsing = false;
-
-  let headers = [
-    "Категория",
-    "Город",
-    "Период"
-  ];
+  let headers = ["Категория", "Город", "Период"];
   if (locationType !== "none") {
     headers.push("Тип локации");
   }
@@ -138,32 +234,27 @@ async function startMarketParsing(params) {
 
   for (const catObj of validCategories) {
     for (const cityObj of validCities) {
-      if (stopParsing) break;
-
+      if (stopParsingCategories) break;
       const requestBody = buildRequestBody(catObj.id, cityObj.id, locationType, locationOption, period, priceFrom, priceTo, sellerType);
-      console.log("Отправка запроса:", requestBody);
-
+      console.log("Отправка запроса (категории):", requestBody);
       const data = await sendMarketRequest(requestBody);
       if (data.error) {
         console.error(`Ошибка для категории "${catObj.name}" и города "${cityObj.name}":`, data.error);
         if (data.error.includes("429") || data.error.toLowerCase().includes("бан")) {
-          stopParsing = true;
+          stopParsingCategories = true;
           break;
         }
       } else {
-        // Раньше здесь была проверка на data.nodes. Убираем её.
         if (!data.summary) {
           chrome.runtime.sendMessage({
             action: 'showAlert',
             message: `Нет данных для категории "${catObj.name}" в городе "${cityObj.name}".`
           });
-          currentStep++;
-          updateProgress();
+          currentStepCategories++;
+          updateCategoriesProgress(Math.round((currentStepCategories / totalStepsCategories) * 100));
           await delay(getRandomDelay());
           continue;
         }
-
-        // Если summary есть, заполняем строку
         let row = [];
         row.push(catObj.name, cityObj.name, period);
         if (locationType !== "none") {
@@ -183,26 +274,25 @@ async function startMarketParsing(params) {
         row.push(data.summary.categoryRateByItems);
         row.push(data.summary.countSellers);
         row.push(data.summary.viewsToContactConversion);
-        resultsTable.push(row);
+        resultsTableCategories.push(row);
       }
-
-      currentStep++;
-      updateProgress();
+      currentStepCategories++;
+      updateCategoriesProgress(Math.round((currentStepCategories / totalStepsCategories) * 100));
       await delay(getRandomDelay());
     }
-    if (stopParsing) break;
+    if (stopParsingCategories) break;
   }
 
-  console.log("Парсинг завершён.");
-  exportResultsToCSV(headers, resultsTable);
+  exportCategoriesResults(headers, resultsTableCategories);
   chrome.runtime.sendMessage({
     action: 'parsingProgress',
     progress: 100,
-    parsedCount: currentStep
+    parsedCount: currentStepCategories,
+    mode: 'categories'
   });
 }
 
-function exportResultsToCSV(headers, rows) {
+function exportCategoriesResults(headers, rows) {
   let csvContent = headers.join(",") + "\n";
   rows.forEach(row => {
     const csvRow = row.map(field => {
@@ -211,7 +301,6 @@ function exportResultsToCSV(headers, rows) {
     }).join(",");
     csvContent += csvRow + "\n";
   });
-
   const dataUrl = "data:text/csv;charset=utf-8," + encodeURIComponent(csvContent);
   chrome.downloads.download({
     url: dataUrl,
@@ -221,7 +310,10 @@ function exportResultsToCSV(headers, rows) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'startMarketParsing') {
+  if (message.action === 'startParsing') {
+    startQueriesParsing(message.data);
+    sendResponse({ status: 'started' });
+  } else if (message.action === 'startMarketParsing') {
     startMarketParsing(message.data);
     sendResponse({ status: 'started' });
   }

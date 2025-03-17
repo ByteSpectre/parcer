@@ -2,63 +2,99 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Avito Analytics</title>
+  <title>Avito Analytics Combined</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="container">
-    <h3>Создание запроса «Спрос в категориях»</h3>
-    <label>Категории (по одному названию на строку):</label>
-    <textarea id="categories" placeholder="Например:
+    <h3>Avito Analytics</h3>
+    <div class="tabs">
+      <button id="tabQueries" class="tab-button active">Аналитика по запросам</button>
+      <button id="tabCategories" class="tab-button">Аналитика по категориям</button>
+    </div>
+    <!-- Форма для аналитики по запросам -->
+    <div id="queriesSection">
+      <label>Ключевые запросы (по одному на строку):</label>
+      <textarea id="queries" placeholder="Например:
+Запрос 1
+Запрос 2"></textarea>
+      
+      <label>Регионы (названия или id, по одному на строку):</label>
+      <textarea id="regions" placeholder="Например:
+Москва
+Санкт-Петербург"></textarea>
+      
+      <label>Период:</label>
+      <select id="periodQueries">
+        <option value="week">7 дней</option>
+        <option value="month">30 дней</option>
+      </select>
+      
+      <button id="startQueriesButton">Начать (запросы)</button>
+      
+      <div class="progressContainer">
+        <label>Прогресс:</label>
+        <progress id="progressBarQueries" value="0" max="100"></progress>
+        <span id="progressTextQueries">0%</span>
+        <div id="parsedCountQueries">Спарсено отчетов: 0</div>
+      </div>
+    </div>
+    
+    <!-- Форма для аналитики по категориям -->
+    <div id="categoriesSection" style="display:none;">
+      <label>Категории (по одному названию на строку):</label>
+      <textarea id="categories" placeholder="Например:
 Готовый бизнес и оборудование
 Животные
 Хобби и отдых"></textarea>
-    
-    <label>Город (по одному названию на строку):</label>
-    <textarea id="cities" placeholder="Например:
+      
+      <label>Города (по одному названию на строку):</label>
+      <textarea id="cities" placeholder="Например:
 Москва
 Санкт-Петербург"></textarea>
-    
-    <label>Тип Локации:</label>
-    <select id="locationType">
-      <option value="none">Не выбрано</option>
-      <option value="districts">Районы</option>
-      <option value="metro">Метро</option>
-    </select>
-    
-    <div id="locationOptionsContainer" style="display:none;">
-      <label id="locationOptionsLabel"></label>
-      <select id="locationOptions"></select>
-    </div>
-    
-    <label>Период:</label>
-    <div class="radio-row">
-      <label><input type="radio" name="period" value="day" checked> За сегодня</label>
-      <label><input type="radio" name="period" value="month"> За предыдущий месяц</label>
-    </div>
-    
-    <label>Тип продавца:</label>
-    <div class="radio-row">
-      <label><input type="radio" name="sellerType" value="all" checked> Все продавцы</label>
-      <label><input type="radio" name="sellerType" value="1"> Частные</label>
-      <label><input type="radio" name="sellerType" value="2"> Компании</label>
-    </div>
-    
-    <label>Цена (руб):</label>
-    <div class="price-range">
-      <input type="number" id="priceFrom" placeholder="От">
-      <input type="number" id="priceTo" placeholder="До">
-    </div>
-    
-    <button id="startButton">Начать парсинг</button>
-    
-    <div id="progressContainer">
-      <label>Прогресс:</label>
-      <progress id="progressBar" value="0" max="100"></progress>
-      <span id="progressText">0%</span>
-      <div id="parsedCount">Спарсено отчетов: 0</div>
+      
+      <label>Тип Локации:</label>
+      <select id="locationType">
+        <option value="none">Не выбрано</option>
+        <option value="districts">Районы</option>
+        <option value="metro">Метро</option>
+      </select>
+      
+      <div id="locationOptionsContainer" style="display:none;">
+        <label id="locationOptionsLabel"></label>
+        <select id="locationOptions"></select>
+      </div>
+      
+      <label>Период:</label>
+      <select id="periodCategories">
+        <option value="day">За сегодня</option>
+        <option value="month">За предыдущий месяц</option>
+      </select>
+      
+      <label>Цена (руб):</label>
+      <div class="price-range">
+        <input type="number" id="priceFrom" placeholder="От">
+        <input type="number" id="priceTo" placeholder="До">
+      </div>
+      
+      <label>Тип продавца:</label>
+      <div class="radio-row">
+        <label><input type="radio" name="sellerType" value="all" checked> Все продавцы</label>
+        <label><input type="radio" name="sellerType" value="1"> Частные</label>
+        <label><input type="radio" name="sellerType" value="2"> Компании</label>
+      </div>
+      
+      <button id="startCategoriesButton">Начать (категории)</button>
+      
+      <div class="progressContainer">
+        <label>Прогресс:</label>
+        <progress id="progressBarCategories" value="0" max="100"></progress>
+        <span id="progressTextCategories">0%</span>
+        <div id="parsedCountCategories">Спарсено отчетов: 0</div>
+      </div>
     </div>
   </div>
+  
   <script src="popup.js"></script>
 </body>
 </html>
