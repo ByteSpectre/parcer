@@ -1,0 +1,39 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 10px;
+  width: 400px;
+  box-sizing: border-box;
+}
+label {
+  display: block;
+  margin-top: 10px;
+  font-weight: bold;
+}
+textarea, input, select, button {
+  width: 100%;
+  margin-top: 5px;
+  box-sizing: border-box;
+}
+.radio-row {
+  display: flex;
+  justify-content: space-evenly;
+  align-items: center;
+  gap: 20px;
+}
+.radio-row label {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  gap: 5px;
+}
+#progressContainer {
+  margin-top: 10px;
+}
+#progressBar {
+  width: 100%;
+  height: 20px;
+}
+.price-range {
+  display: flex;
+  gap: 2px;
+}

@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Avito Analytics Parser",
+  "version": "1.0",
+  "description": "Расширение для массового парсинга аналитики Авито с сохранением отчёта в виде таблицы.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://www.avito.ru/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Парсинг аналитики Авито"
+  }
+}

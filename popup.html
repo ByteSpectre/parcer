@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Avito Analytics</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h3>Создание запроса «Спрос в категориях»</h3>
+    <label>Категории (по одному названию на строку):</label>
+    <textarea id="categories" placeholder="Например:
+Готовый бизнес и оборудование
+Животные
+Хобби и отдых"></textarea>
+    
+    <label>Город (по одному названию на строку):</label>
+    <textarea id="cities" placeholder="Например:
+Москва
+Санкт-Петербург"></textarea>
+    
+    <label>Тип Локации:</label>
+    <select id="locationType">
+      <option value="none">Не выбрано</option>
+      <option value="districts">Районы</option>
+      <option value="metro">Метро</option>
+    </select>
+    
+    <div id="locationOptionsContainer" style="display:none;">
+      <label id="locationOptionsLabel"></label>
+      <select id="locationOptions"></select>
+    </div>
+    
+    <label>Период:</label>
+    <div class="radio-row">
+      <label><input type="radio" name="period" value="day" checked> За сегодня</label>
+      <label><input type="radio" name="period" value="month"> За предыдущий месяц</label>
+    </div>
+    
+    <label>Тип продавца:</label>
+    <div class="radio-row">
+      <label><input type="radio" name="sellerType" value="all" checked> Все продавцы</label>
+      <label><input type="radio" name="sellerType" value="1"> Частные</label>
+      <label><input type="radio" name="sellerType" value="2"> Компании</label>
+    </div>
+    
+    <label>Цена (руб):</label>
+    <div class="price-range">
+      <input type="number" id="priceFrom" placeholder="От">
+      <input type="number" id="priceTo" placeholder="До">
+    </div>
+    
+    <button id="startButton">Начать парсинг</button>
+    
+    <div id="progressContainer">
+      <label>Прогресс:</label>
+      <progress id="progressBar" value="0" max="100"></progress>
+      <span id="progressText">0%</span>
+      <div id="parsedCount">Спарсено отчетов: 0</div>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
